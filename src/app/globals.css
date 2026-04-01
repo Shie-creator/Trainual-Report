@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5fbf4;
+  --foreground: #1e3565;
+  --surface: #ffffff;
+  --surface-muted: #edf5f7;
+  --border: #d7e3ea;
+  --brand-navy: #1e3565;
+  --brand-mint: #9acf8c;
+  --brand-seafoam: #88d0c8;
+  --brand-powder: #dae4fb;
+  --brand-sand: #e6cca4;
+  --success: #2f7d32;
+  --warning: #b88315;
+  --danger: #c90808;
+  --muted-foreground: #5b6f8f;
+  --shadow-card: 0 18px 40px rgba(30, 53, 101, 0.08);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Aptos", "Trebuchet MS", "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(154, 207, 140, 0.28), transparent 32%),
+    linear-gradient(180deg, #fbfdf9 0%, #f5fbf4 100%);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Aptos", "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(136, 208, 200, 0.45);
+}
+
+.card-surface {
+  background: color-mix(in srgb, var(--surface) 92%, white 8%);
+  box-shadow: var(--shadow-card);
+}
+
+.data-grid {
+  background-image:
+    linear-gradient(to right, rgba(30, 53, 101, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 53, 101, 0.03) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
