@@ -72,9 +72,6 @@ export function LoginForm({ siteUrl }: { siteUrl: string }) {
       <section className="flex items-center justify-center px-6 py-12 lg:px-10">
         <div className="card-surface w-full max-w-md rounded-[32px] border border-white/80 p-8">
           <div className="mb-8 space-y-3">
-            <div className="inline-flex rounded-full bg-[var(--brand-powder)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand-navy)]">
-              Secure Access
-            </div>
             <h2 className="font-serif text-4xl font-semibold text-[var(--brand-navy)]">
               Sign in with email
             </h2>

@@ -1,7 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { getCurrentProfile } from "@/lib/auth";
 import { normalizeCompletionRows, normalizeManagerRows } from "@/lib/imports/normalize";
 import {
   parseCompletionFile,
@@ -336,11 +335,6 @@ async function uploadOriginalFile(
 }
 
 export async function POST(request: Request) {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") {
-    return NextResponse.json({ message: "Admin access is required." }, { status: 403 });
-  }
-
   try {
     const supabase = await createSupabaseServerClient();
     const formData = await request.formData();

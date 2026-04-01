@@ -1,20 +1,16 @@
 import Link from "next/link";
 import { format } from "date-fns";
 
-import { LogoutButton } from "@/components/logout-button";
-
 export function AppShell({
   children,
   title,
   subtitle,
   latestImportAt,
-  isAdmin,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle: string;
   latestImportAt: string | null;
-  isAdmin: boolean;
 }) {
   return (
     <div className="min-h-screen bg-transparent">
@@ -45,15 +41,12 @@ export function AppShell({
             >
               Dashboard
             </Link>
-            {isAdmin ? (
-              <Link
-                className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--brand-navy)] transition hover:bg-[var(--surface-muted)]"
-                href="/admin/imports"
-              >
-                Admin Imports
-              </Link>
-            ) : null}
-            <LogoutButton />
+            <Link
+              className="rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--brand-navy)] transition hover:bg-[var(--surface-muted)]"
+              href="/admin/imports"
+            >
+              Imports
+            </Link>
           </div>
         </div>
       </header>
