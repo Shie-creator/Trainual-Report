@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 
 import { getCompletionStatus, STATUS_ORDER, type CompletionStatus } from "@/lib/constants";
+import fallbackSeed from "@/data/nao-seed.json";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type DashboardEmployeeRecord = {
@@ -125,6 +126,10 @@ export async function getDashboardDataset(): Promise<DashboardDataset> {
       status: getCompletionStatus(Number(row.completion_percentage)),
       active: row.employee!.active,
     }));
+
+  if (!employees.length) {
+    return fallbackSeed as DashboardDataset;
+  }
 
   return {
     employees,
