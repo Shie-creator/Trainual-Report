@@ -225,7 +225,19 @@ async function upsertEmployees(
     };
 
     if (existing) {
-      updates.push({ id: existing.id, ...payload });
+      updates.push({
+        id: existing.id,
+        employee_name: payload.employee_name || existing.employee_name,
+        employee_email: payload.employee_email || existing.employee_email,
+        employee_external_id:
+          payload.employee_external_id || existing.employee_external_id,
+        department: payload.department || existing.department,
+        manager_id: payload.manager_id || existing.manager_id,
+        active: payload.active,
+        work_location: payload.work_location || existing.work_location,
+        job_title: payload.job_title || existing.job_title,
+        last_active: payload.last_active || existing.last_active,
+      });
       return;
     }
 
