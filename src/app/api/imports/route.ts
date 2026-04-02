@@ -10,6 +10,7 @@ import {
   validateCompletionMapping,
   validateManagerMapping,
 } from "@/lib/imports/parser";
+import { resolveCanonicalManagerName } from "@/lib/name-matching";
 import type {
   CompletionCanonicalField,
   FieldMapping,
@@ -428,6 +429,13 @@ export async function POST(request: Request) {
     }
 
     const managerMap = await upsertManagers(supabase, managerRows);
+    const canonicalManagerNames = Array.from(
+      new Set(managerRows.map((row) => row.managerName).filter(Boolean)),
+    );
+    completionRows = completionRows.map((row) => ({
+      ...row,
+      managerName: resolveCanonicalManagerName(row.managerName, canonicalManagerNames),
+    }));
     const employeeMap = await upsertEmployees(supabase, managerRows, completionRows, managerMap);
     const completionCount = await insertCompletions(supabase, completionRows, employeeMap);
 
