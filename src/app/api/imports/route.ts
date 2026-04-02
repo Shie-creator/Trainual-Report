@@ -337,16 +337,6 @@ async function uploadOriginalFile(
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const uploadPassword = String(formData.get("uploadPassword") ?? "");
-    const configuredPassword = process.env.UPLOAD_PASSWORD;
-
-    if (!configuredPassword || uploadPassword !== configuredPassword) {
-      return NextResponse.json(
-        { message: "Upload password is incorrect." },
-        { status: 401 },
-      );
-    }
-
     const supabase = await createSupabaseServerClient();
     const completionFile = formData.get("completionFile");
     const onshoreFile = formData.get("onshoreManagerFile");

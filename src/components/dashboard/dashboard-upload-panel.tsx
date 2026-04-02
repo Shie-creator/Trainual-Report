@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 export function DashboardUploadPanel() {
-  const [uploadPassword, setUploadPassword] = useState("");
   const [completionFile, setCompletionFile] = useState<File | null>(null);
   const [onshoreFile, setOnshoreFile] = useState<File | null>(null);
   const [offshoreFile, setOffshoreFile] = useState<File | null>(null);
@@ -17,7 +16,6 @@ export function DashboardUploadPanel() {
   async function handleUpload() {
     setStatus("submitting");
     const formData = new FormData();
-    formData.append("uploadPassword", uploadPassword);
     if (completionFile) formData.append("completionFile", completionFile);
     if (onshoreFile) formData.append("onshoreManagerFile", onshoreFile);
     if (offshoreFile) formData.append("offshoreManagerFile", offshoreFile);
@@ -52,19 +50,6 @@ export function DashboardUploadPanel() {
         </div>
 
         <div className="grid gap-3">
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">
-              Upload Password
-            </span>
-            <input
-              className="w-full rounded-2xl border bg-white px-5 py-4 outline-none"
-              placeholder="Enter admin upload password"
-              type="password"
-              value={uploadPassword}
-              onChange={(event) => setUploadPassword(event.target.value)}
-            />
-          </label>
-
           <div className="grid gap-3 md:grid-cols-3">
             <UploadButton label={onshoreFile?.name ?? "Choose Onshore XLSX"} accept=".xlsx" onPick={setOnshoreFile} />
             <UploadButton label={offshoreFile?.name ?? "Choose Offshore XLSX"} accept=".xlsx" onPick={setOffshoreFile} />
@@ -74,7 +59,7 @@ export function DashboardUploadPanel() {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               className="px-8 py-3"
-              disabled={status === "submitting" || !uploadPassword || (!completionFile && !onshoreFile && !offshoreFile)}
+              disabled={status === "submitting" || (!completionFile && !onshoreFile && !offshoreFile)}
               onClick={handleUpload}
             >
               {status === "submitting" ? (
