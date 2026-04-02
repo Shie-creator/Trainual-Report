@@ -21,11 +21,16 @@ export const managerCanonicalFields = [
   "department",
   "role",
   "status",
+  "work_location",
 ] as const;
 
 export type CompletionCanonicalField = (typeof completionCanonicalFields)[number];
 export type ManagerCanonicalField = (typeof managerCanonicalFields)[number];
-export type ImportType = "completion" | "manager_mapping";
+export type ImportType =
+  | "completion"
+  | "manager_mapping"
+  | "manager_mapping_onshore"
+  | "manager_mapping_offshore";
 
 export type FieldMapping<T extends string> = Partial<Record<T, string>>;
 
@@ -57,6 +62,7 @@ export type NormalizedCompletionRow = {
   snapshotDate: string | null;
   managerName: string | null;
   department: string | null;
+  lastActive: string | null;
 };
 
 export type NormalizedManagerRow = {
@@ -68,4 +74,5 @@ export type NormalizedManagerRow = {
   department: string | null;
   role: string | null;
   status: string | null;
+  workLocation: "Onshore" | "Offshore";
 };
