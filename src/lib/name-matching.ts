@@ -73,3 +73,23 @@ export function resolveCanonicalManagerName(
   const alias = canonicalNames.find((canonical) => isAliasMatch(trimmed, canonical));
   return alias ?? trimmed;
 }
+
+export function resolveCanonicalPersonName(
+  candidate: string | null | undefined,
+  canonicalNames: string[],
+) {
+  if (!candidate) {
+    return candidate ?? null;
+  }
+
+  const trimmed = candidate.trim();
+  const exact = canonicalNames.find(
+    (canonical) => normalizeName(canonical) === normalizeName(trimmed),
+  );
+  if (exact) {
+    return exact;
+  }
+
+  const alias = canonicalNames.find((canonical) => isAliasMatch(trimmed, canonical));
+  return alias ?? trimmed;
+}

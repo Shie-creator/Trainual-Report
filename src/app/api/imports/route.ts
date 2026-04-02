@@ -10,7 +10,10 @@ import {
   validateCompletionMapping,
   validateManagerMapping,
 } from "@/lib/imports/parser";
-import { resolveCanonicalManagerName } from "@/lib/name-matching";
+import {
+  resolveCanonicalManagerName,
+  resolveCanonicalPersonName,
+} from "@/lib/name-matching";
 import type {
   CompletionCanonicalField,
   FieldMapping,
@@ -119,6 +122,7 @@ async function upsertEmployees(
   }
 
   const employeeMap = new Map<string, ExistingEmployee>();
+  const canonicalRosterNames = managerRows.map((row) => row.employeeName);
   (existingEmployees ?? []).forEach((employee) => {
     if (employee.employee_external_id) {
       employeeMap.set(`external:${normalizeKey(employee.employee_external_id)}`, employee);
@@ -128,6 +132,12 @@ async function upsertEmployees(
     }
     employeeMap.set(`name:${normalizeKey(employee.employee_name)}`, employee);
   });
+
+  const normalizedCompletionRows = completionRows.map((row) => ({
+    ...row,
+    employeeName:
+      resolveCanonicalPersonName(row.employeeName, canonicalRosterNames) ?? row.employeeName,
+  }));
 
   const mergedRows = new Map<
     string,
@@ -144,7 +154,7 @@ async function upsertEmployees(
     }
   >();
 
-  [...managerRows, ...completionRows].forEach((row) => {
+  [...managerRows, ...normalizedCompletionRows].forEach((row) => {
     const key =
       normalizeKey("employeeExternalId" in row ? row.employeeExternalId : null) ||
       normalizeKey(row.employeeEmail) ||
@@ -238,6 +248,10 @@ async function upsertEmployees(
         job_title: payload.job_title || existing.job_title,
         last_active: payload.last_active || existing.last_active,
       });
+      return;
+    }
+
+    if ("completionPercentage" in row && !("workLocation" in row)) {
       return;
     }
 

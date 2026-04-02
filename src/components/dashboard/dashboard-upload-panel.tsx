@@ -45,15 +45,15 @@ export function DashboardUploadPanel() {
             Refresh the live dashboard for everyone
           </h3>
           <p className="text-xl text-[#9f5f49]">
-            Upload Onshore and Offshore roster mappings first, then Trainual completion whenever it is ready.
+            First-time setup: upload the Onshore and Offshore roster mappings once. After that, regular refreshes only need a new Trainual Completion CSV.
           </p>
         </div>
 
         <div className="grid gap-3">
           <div className="grid gap-3 md:grid-cols-3">
+            <UploadButton primary label={completionFile?.name ?? "Choose Completion CSV"} accept=".csv,text/csv" onPick={setCompletionFile} />
             <UploadButton label={onshoreFile?.name ?? "Choose Onshore XLSX"} accept=".xlsx" onPick={setOnshoreFile} />
             <UploadButton label={offshoreFile?.name ?? "Choose Offshore XLSX"} accept=".xlsx" onPick={setOffshoreFile} />
-            <UploadButton label={completionFile?.name ?? "Choose Completion CSV"} accept=".csv,text/csv" onPick={setCompletionFile} />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -80,6 +80,9 @@ export function DashboardUploadPanel() {
               {message}
             </div>
           </div>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            If Onshore vs Offshore shows 0% / 0%, upload both mapping files once to restore work-location assignments. After that, completion-only uploads will keep those assignments.
+          </p>
         </div>
       </div>
     </Card>
@@ -90,13 +93,21 @@ function UploadButton({
   label,
   accept,
   onPick,
+  primary = false,
 }: {
   label: string;
   accept: string;
   onPick: (file: File | null) => void;
+  primary?: boolean;
 }) {
   return (
-    <label className="cursor-pointer rounded-full border bg-white px-5 py-4 text-center font-semibold text-[var(--brand-navy)]">
+    <label
+      className={`cursor-pointer rounded-full border px-5 py-4 text-center font-semibold ${
+        primary
+          ? "border-[var(--brand-navy)] bg-[var(--brand-navy)] text-white"
+          : "bg-white text-[var(--brand-navy)]"
+      }`}
+    >
       <input
         className="hidden"
         type="file"

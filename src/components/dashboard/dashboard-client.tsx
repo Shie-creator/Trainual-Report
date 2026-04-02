@@ -203,6 +203,7 @@ export function DashboardClient({
       onshoreCount: onshore.length,
       offshoreCount: offshore.length,
       byManager,
+      hasLocationData: onshore.length + offshore.length > 0,
     };
   }, [filtered]);
 
@@ -268,8 +269,16 @@ export function DashboardClient({
         <MetricCard label="Needs Attention" value={String(metrics.attention)} helper="Employees below 80%." />
         <MetricCard
           label="Onshore vs Offshore"
-          value={`${formatPercent(metrics.onshoreAverage)} / ${formatPercent(metrics.offshoreAverage)}`}
-          helper={`${metrics.onshoreCount} onshore • ${metrics.offshoreCount} offshore`}
+          value={
+            metrics.hasLocationData
+              ? `${formatPercent(metrics.onshoreAverage)} / ${formatPercent(metrics.offshoreAverage)}`
+              : "Setup Needed"
+          }
+          helper={
+            metrics.hasLocationData
+              ? `${metrics.onshoreCount} onshore • ${metrics.offshoreCount} offshore`
+              : "Upload both mapping files once to restore location assignments."
+          }
         />
       </section>
 
