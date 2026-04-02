@@ -22,8 +22,8 @@ export default function LoginPage() {
             The dashboard is now open without sign-in.
           </h1>
           <p className="text-sm leading-7 text-[var(--muted-foreground)]">
-            Use the public dashboard directly or open the import page to upload fresh
-            Trainual files.
+            Use the public dashboard directly, or keep email sign-in available here if you
+            still want optional authenticated access for Supabase accounts.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

@@ -10,9 +10,12 @@ export type DashboardEmployeeRecord = {
   employeeEmail: string | null;
   employeeExternalId: string | null;
   department: string | null;
+  jobTitle: string | null;
+  lastActive: string | null;
   managerId: string | null;
   managerName: string;
   managerEmail: string | null;
+  workLocation: "Onshore" | "Offshore" | null;
   completionId: string;
   completionPercentage: number;
   completedModules: number | null;
@@ -51,11 +54,14 @@ type CompletionJoinRow = {
     employee_external_id: string | null;
     employee_name: string;
     id: string;
+    job_title: string | null;
+    last_active: string | null;
     manager: {
       id: string;
       manager_email: string | null;
       manager_name: string;
     } | null;
+    work_location: "Onshore" | "Offshore" | null;
   } | null;
 };
 
@@ -80,6 +86,9 @@ export async function getDashboardDataset(): Promise<DashboardDataset> {
               employee_email,
               employee_external_id,
               department,
+              job_title,
+              last_active,
+              work_location,
               active,
               manager:managers(
                 id,
@@ -114,9 +123,12 @@ export async function getDashboardDataset(): Promise<DashboardDataset> {
       employeeEmail: row.employee!.employee_email,
       employeeExternalId: row.employee!.employee_external_id,
       department: row.employee!.department,
+      jobTitle: row.employee!.job_title,
+      lastActive: row.employee!.last_active,
       managerId: row.employee!.manager?.id ?? null,
       managerName: row.employee!.manager?.manager_name ?? "Unassigned",
       managerEmail: row.employee!.manager?.manager_email ?? null,
+      workLocation: row.employee!.work_location,
       completionId: row.id,
       completionPercentage: Number(row.completion_percentage),
       completedModules: row.completed_modules,

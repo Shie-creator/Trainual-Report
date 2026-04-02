@@ -3,15 +3,16 @@ import { NextResponse } from "next/server";
 
 import { normalizeCompletionRows, normalizeManagerRows } from "@/lib/imports/normalize";
 import {
+  getDefaultCompletionMapping,
+  getDefaultManagerMapping,
   parseCompletionFile,
-  parseManagerMappingFile,
+  parseManagerWorkbook,
   validateCompletionMapping,
   validateManagerMapping,
 } from "@/lib/imports/parser";
 import type {
   CompletionCanonicalField,
   FieldMapping,
-  ManagerCanonicalField,
   NormalizedCompletionRow,
   NormalizedManagerRow,
 } from "@/lib/imports/types";
@@ -32,6 +33,9 @@ type ExistingEmployee = {
   employee_external_id: string | null;
   manager_id: string | null;
   department: string | null;
+  work_location: "Onshore" | "Offshore" | null;
+  job_title: string | null;
+  last_active: string | null;
 };
 
 function normalizeKey(value: string | null | undefined) {
@@ -47,7 +51,6 @@ async function upsertManagers(
     .select("id, manager_name, manager_email, department");
 
   const managerMap = new Map<string, ExistingManager>();
-
   (existingManagers ?? []).forEach((manager) => {
     managerMap.set(`name:${normalizeKey(manager.manager_name)}`, manager);
     if (manager.manager_email) {
@@ -76,7 +79,6 @@ async function upsertManagers(
     const { error } = await supabase.from("managers").upsert(upsertPayload, {
       onConflict: "manager_name",
     });
-
     if (error) {
       throw new Error(`Failed to upsert managers: ${error.message}`);
     }
@@ -107,7 +109,9 @@ async function upsertEmployees(
 ) {
   const { data: existingEmployees, error } = await supabase
     .from("employees")
-    .select("id, employee_name, employee_email, employee_external_id, manager_id, department");
+    .select(
+      "id, employee_name, employee_email, employee_external_id, manager_id, department, work_location, job_title, last_active",
+    );
 
   if (error) {
     throw new Error(error.message);
@@ -133,6 +137,9 @@ async function upsertEmployees(
       department: string | null;
       managerName: string | null;
       active: boolean;
+      workLocation: "Onshore" | "Offshore" | null;
+      jobTitle: string | null;
+      lastActive: string | null;
     }
   >();
 
@@ -150,6 +157,9 @@ async function upsertEmployees(
       department: row.department,
       managerName: row.managerName,
       active: true,
+      workLocation: "workLocation" in row ? row.workLocation : null,
+      jobTitle: "jobTitle" in row ? row.jobTitle : row.role,
+      lastActive: "lastActive" in row ? row.lastActive : null,
     };
 
     current.employeeName = current.employeeName || row.employeeName;
@@ -159,7 +169,11 @@ async function upsertEmployees(
       ("employeeExternalId" in row ? row.employeeExternalId : null);
     current.department = current.department || row.department;
     current.managerName = current.managerName || row.managerName;
-    current.active = "status" in row ? !/terminated/i.test(row.status ?? "") : true;
+    current.active = "status" in row ? !/terminated/i.test(row.status ?? "") : current.active;
+    current.workLocation =
+      current.workLocation || ("workLocation" in row ? row.workLocation : null);
+    current.jobTitle = current.jobTitle || ("jobTitle" in row ? row.jobTitle : row.role);
+    current.lastActive = current.lastActive || ("lastActive" in row ? row.lastActive : null);
     mergedRows.set(key, current);
   });
 
@@ -171,6 +185,9 @@ async function upsertEmployees(
     department: string | null;
     manager_id: string | null;
     active: boolean;
+    work_location: "Onshore" | "Offshore" | null;
+    job_title: string | null;
+    last_active: string | null;
   }> = [];
   const inserts: Array<{
     employee_name: string;
@@ -179,6 +196,9 @@ async function upsertEmployees(
     department: string | null;
     manager_id: string | null;
     active: boolean;
+    work_location: "Onshore" | "Offshore" | null;
+    job_title: string | null;
+    last_active: string | null;
   }> = [];
 
   Array.from(mergedRows.values()).forEach((row) => {
@@ -191,42 +211,31 @@ async function upsertEmployees(
       (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`)) ||
       employeeMap.get(`name:${normalizeKey(row.employeeName)}`);
 
-    if (existing) {
-      updates.push({
-        ...existing,
-        employee_name: row.employeeName,
-        employee_email: row.employeeEmail,
-        employee_external_id: row.employeeExternalId,
-        department: row.department,
-        manager_id: manager?.id ?? null,
-        active: row.active,
-      });
-      return;
-    }
-
-    inserts.push({
+    const payload = {
       employee_name: row.employeeName,
       employee_email: row.employeeEmail,
       employee_external_id: row.employeeExternalId,
       department: row.department,
       manager_id: manager?.id ?? null,
       active: row.active,
-    });
+      work_location: row.workLocation,
+      job_title: row.jobTitle,
+      last_active: row.lastActive,
+    };
+
+    if (existing) {
+      updates.push({ id: existing.id, ...payload });
+      return;
+    }
+
+    inserts.push(payload);
   });
 
   for (const update of updates) {
     const { error: updateError } = await supabase
       .from("employees")
-      .update({
-        employee_name: update.employee_name,
-        employee_email: update.employee_email,
-        employee_external_id: update.employee_external_id,
-        department: update.department,
-        manager_id: update.manager_id,
-        active: update.active,
-      })
+      .update(update)
       .eq("id", update.id);
-
     if (updateError) {
       throw new Error(`Failed to update employee ${update.employee_name}: ${updateError.message}`);
     }
@@ -234,7 +243,6 @@ async function upsertEmployees(
 
   if (inserts.length) {
     const { error: insertError } = await supabase.from("employees").insert(inserts);
-
     if (insertError) {
       throw new Error(`Failed to insert employees: ${insertError.message}`);
     }
@@ -242,8 +250,9 @@ async function upsertEmployees(
 
   const { data: refreshedEmployees, error: refreshError } = await supabase
     .from("employees")
-    .select("id, employee_name, employee_email, employee_external_id, manager_id, department");
-
+    .select(
+      "id, employee_name, employee_email, employee_external_id, manager_id, department, work_location, job_title, last_active",
+    );
   if (refreshError) {
     throw new Error(refreshError.message);
   }
@@ -273,9 +282,7 @@ async function insertCompletions(
         (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`)) ||
         employeeMap.get(`name:${normalizeKey(row.employeeName)}`);
 
-      if (!employee) {
-        return null;
-      }
+      if (!employee) return null;
 
       return {
         employee_id: employee.id,
@@ -288,29 +295,25 @@ async function insertCompletions(
     })
     .filter(
       (
-        value,
-      ): value is {
+        row,
+      ): row is {
         employee_id: string;
         completion_percentage: number;
         completed_modules: number | null;
         total_modules: number | null;
         remaining_modules: number | null;
         snapshot_date: string | null;
-      } => Boolean(value),
+      } => Boolean(row),
     );
 
-  if (!payload.length) {
-    return 0;
-  }
+  if (!payload.length) return 0;
 
   const { error } = await supabase.from("trainual_completions").upsert(payload, {
     onConflict: "employee_id,snapshot_date",
   });
-
   if (error) {
     throw new Error(`Failed to save completion snapshots: ${error.message}`);
   }
-
   return payload.length;
 }
 
@@ -320,134 +323,139 @@ async function uploadOriginalFile(
   folder: string,
 ) {
   const path = `${folder}/${Date.now()}-${slugify(file.name)}`;
-  const { error } = await supabase.storage
-    .from("trainual-imports")
-    .upload(path, file, {
-      contentType: file.type || "text/csv",
-      upsert: true,
-    });
-
+  const { error } = await supabase.storage.from("trainual-imports").upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
   if (error) {
     throw new Error(`Unable to store import file ${file.name}: ${error.message}`);
   }
-
   return path;
 }
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createSupabaseServerClient();
     const formData = await request.formData();
+    const uploadPassword = String(formData.get("uploadPassword") ?? "");
+    const configuredPassword = process.env.UPLOAD_PASSWORD;
+
+    if (!configuredPassword || uploadPassword !== configuredPassword) {
+      return NextResponse.json(
+        { message: "Upload password is incorrect." },
+        { status: 401 },
+      );
+    }
+
+    const supabase = await createSupabaseServerClient();
     const completionFile = formData.get("completionFile");
-    const managerFile = formData.get("managerFile");
-    const completionMapping = JSON.parse(
-      String(formData.get("completionMapping") ?? "{}"),
-    ) as FieldMapping<CompletionCanonicalField>;
-    const managerMapping = JSON.parse(
-      String(formData.get("managerMapping") ?? "{}"),
-    ) as FieldMapping<ManagerCanonicalField>;
-    const fallbackSnapshotDate = String(formData.get("completionSnapshotDate") ?? "");
+    const onshoreFile = formData.get("onshoreManagerFile");
+    const offshoreFile = formData.get("offshoreManagerFile");
 
-    if (!(completionFile instanceof File) || !(managerFile instanceof File)) {
+    if (
+      !(completionFile instanceof File) &&
+      !(onshoreFile instanceof File) &&
+      !(offshoreFile instanceof File)
+    ) {
       return NextResponse.json(
-        { message: "Both files are required." },
+        { message: "Upload at least one file to refresh the dashboard." },
         { status: 400 },
       );
     }
 
-    const [completionText, managerText] = await Promise.all([
-      completionFile.text(),
-      managerFile.text(),
-    ]);
+    const managerRows: NormalizedManagerRow[] = [];
+    const importLogs: Array<{
+      source_name: string;
+      import_type: "completion" | "manager_mapping";
+      row_count: number;
+      status: "success";
+      notes: string;
+      storage_path: string | null;
+    }> = [];
 
-    const completionParsed = parseCompletionFile(completionText, completionFile.name);
-    const managerParsed = parseManagerMappingFile(managerText);
+    const managerMapping = getDefaultManagerMapping(["Employee Name", "Jobs Title", "Manager Name"]);
 
-    const completionIssues = validateCompletionMapping(
-      completionParsed.rows,
-      completionMapping,
-    );
-    const managerIssues = validateManagerMapping(managerMapping);
+    for (const [file, workLocation] of [
+      [onshoreFile, "Onshore"],
+      [offshoreFile, "Offshore"],
+    ] as const) {
+      if (!(file instanceof File)) continue;
+      const parsed = parseManagerWorkbook(await file.arrayBuffer());
+      const issues = validateManagerMapping(managerMapping);
+      if (issues.length) {
+        return NextResponse.json({ message: issues.join(" ") }, { status: 400 });
+      }
 
-    if (completionIssues.length || managerIssues.length) {
-      return NextResponse.json(
-        {
-          message: [...completionIssues, ...managerIssues].join(" "),
-        },
-        { status: 400 },
-      );
+      const normalized = normalizeManagerRows(parsed.rows, managerMapping, workLocation);
+      managerRows.push(...normalized);
+      importLogs.push({
+        source_name: file.name,
+        import_type: "manager_mapping",
+        row_count: normalized.length,
+        status: "success",
+        notes: `${workLocation} roster import.`,
+        storage_path: await uploadOriginalFile(
+          supabase,
+          file,
+          `manager-mapping/${workLocation.toLowerCase()}`,
+        ),
+      });
     }
 
-    const normalizedCompletions = normalizeCompletionRows(
-      completionParsed.rows,
-      completionMapping,
-      fallbackSnapshotDate || completionParsed.inferredSnapshotDate,
-    );
-    const normalizedManagers = normalizeManagerRows(managerParsed.rows, managerMapping);
+    let completionRows: NormalizedCompletionRow[] = [];
+    if (completionFile instanceof File) {
+      const completionText = await completionFile.text();
+      const parsed = parseCompletionFile(completionText, completionFile.name);
+      const completionMapping = getDefaultCompletionMapping(parsed.headers);
+      const issues = validateCompletionMapping(parsed.rows, completionMapping);
+      if (issues.length) {
+        return NextResponse.json({ message: issues.join(" ") }, { status: 400 });
+      }
 
-    const [completionStoragePath, managerStoragePath] = await Promise.all([
-      uploadOriginalFile(supabase, completionFile, "completion"),
-      uploadOriginalFile(supabase, managerFile, "manager-mapping"),
-    ]);
+      completionRows = normalizeCompletionRows(
+        parsed.rows,
+        completionMapping as FieldMapping<CompletionCanonicalField>,
+        parsed.inferredSnapshotDate,
+      );
 
-    const managerMap = await upsertManagers(supabase, normalizedManagers);
-    const employeeMap = await upsertEmployees(
-      supabase,
-      normalizedManagers,
-      normalizedCompletions,
-      managerMap,
-    );
-    const completionCount = await insertCompletions(
-      supabase,
-      normalizedCompletions,
-      employeeMap,
-    );
-
-    const importNotes = [
-      `Managers processed: ${normalizedManagers.length}.`,
-      `Completion rows processed: ${normalizedCompletions.length}.`,
-      fallbackSnapshotDate
-        ? `Snapshot date fallback: ${fallbackSnapshotDate}.`
-        : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    const { error: importError } = await supabase.from("imports").insert([
-      {
+      importLogs.push({
         source_name: completionFile.name,
         import_type: "completion",
-        row_count: completionCount,
+        row_count: completionRows.length,
         status: "success",
-        notes: importNotes,
-        storage_path: completionStoragePath,
-      },
-      {
-        source_name: managerFile.name,
-        import_type: "manager_mapping",
-        row_count: normalizedManagers.length,
-        status: "success",
-        notes: importNotes,
-        storage_path: managerStoragePath,
-      },
-    ]);
-
-    if (importError) {
-      throw new Error(importError.message);
+        notes: "Trainual completion import.",
+        storage_path: await uploadOriginalFile(supabase, completionFile, "completion"),
+      });
     }
 
+    const managerMap = await upsertManagers(supabase, managerRows);
+    const employeeMap = await upsertEmployees(supabase, managerRows, completionRows, managerMap);
+    const completionCount = await insertCompletions(supabase, completionRows, employeeMap);
+
+    if (importLogs.length) {
+      const { error } = await supabase.from("imports").insert(
+        importLogs.map((log) =>
+          log.import_type === "completion"
+            ? { ...log, row_count: completionCount }
+            : log,
+        ),
+      );
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    revalidatePath("/");
     revalidatePath("/dashboard");
     revalidatePath("/admin/imports");
     revalidatePath("/manager");
 
     return NextResponse.json({
-      message: `Import complete. Saved ${completionCount} completion snapshots and ${normalizedManagers.length} manager mappings.`,
+      message: `Dashboard refreshed. ${managerRows.length} mapped employees processed and ${completionCount} completion rows applied.`,
     });
   } catch (error) {
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Unexpected import failure.",
+        message: error instanceof Error ? error.message : "Unexpected import failure.",
       },
       { status: 500 },
     );

@@ -1,63 +1,56 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Download, FilterX, Search } from "lucide-react";
+import Link from "next/link";
+import { Download, Search } from "lucide-react";
 
+import { DashboardUploadPanel } from "@/components/dashboard/dashboard-upload-panel";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { STATUS_COLORS, STATUS_ORDER } from "@/lib/constants";
-import type { DashboardEmployeeRecord } from "@/lib/dashboard";
+import type { DashboardDataset, DashboardEmployeeRecord } from "@/lib/dashboard";
 import { downloadTextFile, formatPercent } from "@/lib/utils";
 
 type DashboardFilters = {
   manager: string;
-  department: string;
+  title: string;
   status: string;
   snapshotDate: string;
   completionBand: string;
+  workLocation: string;
   search: string;
 };
 
 function getBand(percentage: number) {
-  if (percentage === 100) return "100%";
-  if (percentage >= 80) return "80-99%";
-  return "Below 80%";
+  if (percentage === 100) return "Complete";
+  if (percentage >= 80) return "Nearly Complete";
+  return "Needs Attention";
 }
 
 function toCsv(records: DashboardEmployeeRecord[]) {
   const headers = [
-    "Employee name",
+    "Employee",
+    "Email",
     "Manager",
-    "Department",
+    "Title",
+    "Work Location",
     "Completion %",
     "Status",
-    "Remaining modules",
-    "Snapshot date",
+    "Last Active",
   ];
 
   const lines = records.map((record) =>
     [
       record.employeeName,
+      record.employeeEmail ?? "",
       record.managerName,
-      record.department ?? "",
+      record.jobTitle ?? "",
+      record.workLocation ?? "",
       record.completionPercentage,
       record.status,
-      record.remainingModules ?? "",
-      record.snapshotDate ?? "",
+      record.lastActive ?? "",
     ]
       .map((value) => `"${String(value).replace(/"/g, '""')}"`)
       .join(","),
@@ -67,32 +60,24 @@ function toCsv(records: DashboardEmployeeRecord[]) {
 }
 
 export function DashboardClient({
-  records,
-  managerOptions,
-  departmentOptions,
-  snapshotOptions,
+  dataset,
   managerScopedId,
 }: {
-  records: DashboardEmployeeRecord[];
-  managerOptions: { value: string; label: string }[];
-  departmentOptions: string[];
-  snapshotOptions: { value: string; label: string }[];
+  dataset: DashboardDataset;
   managerScopedId?: string;
 }) {
+  const records = dataset.employees;
   const [filters, setFilters] = useState<DashboardFilters>({
     manager: managerScopedId ?? "",
-    department: "",
+    title: "",
     status: "",
     snapshotDate: "",
     completionBand: "",
+    workLocation: "",
     search: "",
   });
-  const [sortBy, setSortBy] = useState<keyof DashboardEmployeeRecord>("completionPercentage");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
-  const pageSize = 12;
 
-  const baseRecords = useMemo(() => {
+  const latestRecords = useMemo(() => {
     if (filters.snapshotDate) {
       return records.filter((record) => record.snapshotDate === filters.snapshotDate);
     }
@@ -100,87 +85,91 @@ export function DashboardClient({
     const latestByEmployee = new Map<string, DashboardEmployeeRecord>();
     records.forEach((record) => {
       const current = latestByEmployee.get(record.employeeId);
-      if (!current) {
-        latestByEmployee.set(record.employeeId, record);
-        return;
-      }
-
-      const currentDate = current.snapshotDate ?? "";
-      const nextDate = record.snapshotDate ?? "";
-      if (nextDate > currentDate) {
+      if (!current || (record.snapshotDate ?? "") > (current.snapshotDate ?? "")) {
         latestByEmployee.set(record.employeeId, record);
       }
     });
-
     return Array.from(latestByEmployee.values());
   }, [filters.snapshotDate, records]);
 
   const filtered = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    return baseRecords.filter((record) => {
-      if (filters.manager && (record.managerId ?? record.managerName) !== filters.manager) {
-        return false;
-      }
-
-      if (filters.department && record.department !== filters.department) {
-        return false;
-      }
-
-      if (filters.status && record.status !== filters.status) {
-        return false;
-      }
-
-      if (filters.completionBand && getBand(record.completionPercentage) !== filters.completionBand) {
-        return false;
-      }
-
+    const query = filters.search.toLowerCase().trim();
+    return latestRecords.filter((record) => {
+      if (filters.manager && (record.managerId ?? record.managerName) !== filters.manager) return false;
+      if (filters.title && record.jobTitle !== filters.title) return false;
+      if (filters.status && record.status !== filters.status) return false;
+      if (filters.completionBand && getBand(record.completionPercentage) !== filters.completionBand) return false;
+      if (filters.workLocation && record.workLocation !== filters.workLocation) return false;
       if (
-        search &&
+        query &&
         ![
           record.employeeName,
-          record.managerName,
-          record.department ?? "",
           record.employeeEmail ?? "",
+          record.jobTitle ?? "",
+          record.managerName,
         ]
           .join(" ")
           .toLowerCase()
-          .includes(search)
+          .includes(query)
       ) {
         return false;
       }
-
       return true;
     });
-  }, [baseRecords, filters]);
+  }, [filters, latestRecords]);
+
+  const managers = useMemo(
+    () =>
+      Array.from(
+        new Map(records.map((record) => [record.managerId ?? record.managerName, record.managerName])).entries(),
+      )
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [records],
+  );
+
+  const titles = useMemo(
+    () =>
+      Array.from(
+        new Set(records.map((record) => record.jobTitle).filter((value): value is string => Boolean(value))),
+      ).sort((a, b) => a.localeCompare(b)),
+    [records],
+  );
+
+  const snapshots = useMemo(
+    () =>
+      Array.from(
+        new Set(records.map((record) => record.snapshotDate).filter((value): value is string => Boolean(value))),
+      ).sort((a, b) => (a > b ? -1 : 1)),
+    [records],
+  );
 
   const metrics = useMemo(() => {
     const total = filtered.length;
-    const completeCount = filtered.filter((item) => item.status === "Complete").length;
-    const needsAttentionCount = filtered.filter(
-      (item) => item.status === "Needs Attention",
-    ).length;
-    const overallCompletionRate =
-      total === 0
-        ? 0
-        : filtered.reduce((sum, item) => sum + item.completionPercentage, 0) / total;
+    const average = total ? filtered.reduce((sum, row) => sum + row.completionPercentage, 0) / total : 0;
+    const complete = filtered.filter((row) => row.status === "Complete").length;
+    const nearly = filtered.filter((row) => row.status === "Nearly Complete").length;
+    const attention = filtered.filter((row) => row.status === "Needs Attention").length;
+    const onshore = filtered.filter((row) => row.workLocation === "Onshore");
+    const offshore = filtered.filter((row) => row.workLocation === "Offshore");
 
-    const managerAverages = Array.from(
-      filtered.reduce((map, item) => {
-        const current = map.get(item.managerName) ?? {
-          managerId: item.managerId ?? item.managerName,
-          managerName: item.managerName,
+    const byManager = Array.from(
+      filtered.reduce((map, row) => {
+        const current = map.get(row.managerName) ?? {
+          managerId: row.managerId ?? row.managerName,
+          managerName: row.managerName,
           total: 0,
           count: 0,
           complete: 0,
           nearly: 0,
           attention: 0,
         };
-        current.total += item.completionPercentage;
+        current.total += row.completionPercentage;
         current.count += 1;
-        if (item.status === "Complete") current.complete += 1;
-        if (item.status === "Nearly Complete") current.nearly += 1;
-        if (item.status === "Needs Attention") current.attention += 1;
-        map.set(item.managerName, current);
+        if (row.status === "Complete") current.complete += 1;
+        if (row.status === "Nearly Complete") current.nearly += 1;
+        if (row.status === "Needs Attention") current.attention += 1;
+        map.set(row.managerName, current);
         return map;
       }, new Map<string, {
         managerId: string;
@@ -190,409 +179,347 @@ export function DashboardClient({
         complete: number;
         nearly: number;
         attention: number;
-      }>())
-        .values(),
+      }>()),
     )
-      .map((item) => ({
-        ...item,
-        averageCompletion: item.count ? item.total / item.count : 0,
+      .map(([, row]) => ({
+        ...row,
+        average: row.count ? row.total / row.count : 0,
       }))
-      .sort((a, b) => b.averageCompletion - a.averageCompletion);
-
-    const averageCompletionByManager =
-      managerAverages.length === 0
-        ? 0
-        : managerAverages.reduce((sum, item) => sum + item.averageCompletion, 0) /
-          managerAverages.length;
+      .sort((a, b) => b.average - a.average);
 
     return {
       total,
-      completeCount,
-      needsAttentionCount,
-      overallCompletionRate,
-      averageCompletionByManager,
-      managerAverages,
+      managers: new Set(filtered.map((row) => row.managerName)).size,
+      average,
+      complete,
+      nearly,
+      attention,
+      onshoreAverage: onshore.length
+        ? onshore.reduce((sum, row) => sum + row.completionPercentage, 0) / onshore.length
+        : 0,
+      offshoreAverage: offshore.length
+        ? offshore.reduce((sum, row) => sum + row.completionPercentage, 0) / offshore.length
+        : 0,
+      onshoreCount: onshore.length,
+      offshoreCount: offshore.length,
+      byManager,
     };
   }, [filtered]);
 
-  const sortedRecords = useMemo(() => {
-    const next = [...filtered].sort((a, b) => {
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
-      if (typeof aValue === "number" && typeof bValue === "number") {
-        return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
-      }
-
-      const normalizedA = String(aValue ?? "").toLowerCase();
-      const normalizedB = String(bValue ?? "").toLowerCase();
-      if (normalizedA < normalizedB) return sortDirection === "asc" ? -1 : 1;
-      if (normalizedA > normalizedB) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return next;
-  }, [filtered, sortBy, sortDirection]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
-  const pagedRecords = sortedRecords.slice((page - 1) * pageSize, page * pageSize);
-
-  const kpis = [
-    {
-      label: "Overall completion rate",
-      value: formatPercent(metrics.overallCompletionRate),
-    },
-    {
-      label: "Total employees",
-      value: String(metrics.total),
-    },
-    {
-      label: "Marked Complete",
-      value: String(metrics.completeCount),
-    },
-    {
-      label: "Needs Attention",
-      value: String(metrics.needsAttentionCount),
-    },
-    {
-      label: "Average completion by manager",
-      value: formatPercent(metrics.averageCompletionByManager),
-    },
-  ];
-
-  function handleManagerChartClick(state: {
-    activePayload?: Array<{ payload?: { managerId?: string } }>;
-  }) {
-    const managerId = state.activePayload?.[0]?.payload?.managerId;
-    if (managerId) {
-      updateFilter("manager", managerId);
-    }
-  }
-
-  function updateFilter<Key extends keyof DashboardFilters>(key: Key, value: DashboardFilters[Key]) {
-    setPage(1);
-    setFilters((current) => ({ ...current, [key]: value }));
-  }
-
-  function resetFilters() {
-    setPage(1);
-    setFilters({
-      manager: managerScopedId ?? "",
-      department: "",
-      status: "",
-      snapshotDate: "",
-      completionBand: "",
-      search: "",
-    });
-  }
-
-  function toggleSort(field: keyof DashboardEmployeeRecord) {
-    if (sortBy === field) {
-      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-
-    setSortBy(field);
-    setSortDirection(field === "employeeName" ? "asc" : "desc");
-  }
+  const rows = [...filtered].sort((a, b) => a.completionPercentage - b.completionPercentage);
 
   if (!records.length) {
     return (
       <EmptyState
-        title="No completion data yet"
-        description="An admin can upload the Trainual completion CSV and manager mapping CSV from the Admin Imports page. Once data is imported, the dashboard, charts, filters, and manager drilldowns will populate automatically."
+        title="No data loaded yet"
+        description="Upload the Offshore roster, Onshore roster, and Trainual completion file to populate the public dashboard."
       />
     );
   }
 
+  const lastImportLabel = dataset.latestImportAt
+    ? new Date(dataset.latestImportAt).toLocaleString()
+    : "No uploads yet";
+
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 xl:grid-cols-5 md:grid-cols-2">
-        {kpis.map((card) => (
-          <Card key={card.label}>
-            <p className="text-sm text-[var(--muted-foreground)]">{card.label}</p>
-            <p className="mt-3 font-serif text-4xl font-semibold text-[var(--brand-navy)]">
-              {card.value}
-            </p>
-          </Card>
-        ))}
-      </section>
-
-      <Card className="space-y-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h2 className="font-serif text-2xl font-semibold">Filters</h2>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Filter updates KPI cards, charts, and the employee table in sync.
-            </p>
-          </div>
-          <Button variant="ghost" onClick={resetFilters}>
-            <FilterX className="mr-2 h-4 w-4" />
-            Clear filters
-          </Button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="xl:col-span-2">
-            <label className="mb-2 block text-sm font-medium">Search</label>
-            <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3">
-              <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
-              <input
-                className="w-full bg-transparent outline-none"
-                placeholder="Employee, manager, department"
-                value={filters.search}
-                onChange={(event) => updateFilter("search", event.target.value)}
-              />
+      <section className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
+        <Card className="rounded-[32px] bg-white">
+          <div className="space-y-5">
+            <div className="inline-flex rounded-full bg-[var(--surface-muted)] px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] text-[var(--brand-navy)]">
+              Leadership View
+            </div>
+            <div className="space-y-3">
+              <h2 className="max-w-3xl font-serif text-6xl leading-none text-[var(--brand-navy)]">
+                Trainual Completion Dashboard
+              </h2>
+              <p className="max-w-2xl text-lg leading-8 text-[var(--muted-foreground)]">
+                Which managers have the healthiest team completion rates, which employees
+                need follow-up now, and how onshore versus offshore progress compares.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <div className="rounded-full border px-4 py-2 text-[var(--muted-foreground)]">
+                Last update: {lastImportLabel}
+              </div>
+              <div className="rounded-full border px-4 py-2 text-[var(--muted-foreground)]">
+                Source: Onshore + Offshore roster mapping and Trainual completion
+              </div>
             </div>
           </div>
+        </Card>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
+          <MiniMetric label="Total Employees" value={String(metrics.total)} />
+          <MiniMetric label="Managers" value={String(metrics.managers)} />
+          <MiniMetric label="Complete" value={String(metrics.complete)} />
+          <MiniMetric label="Needs Attention" value={String(metrics.attention)} />
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-5">
+        <MetricCard
+          label="Overall Completion Rate"
+          value={formatPercent(metrics.average)}
+          helper="Weighted across all filtered employees."
+        />
+        <MetricCard label="Complete" value={String(metrics.complete)} helper="Employees fully done." />
+        <MetricCard label="Nearly Complete" value={String(metrics.nearly)} helper="Employees between 80% and 99%." />
+        <MetricCard label="Needs Attention" value={String(metrics.attention)} helper="Employees below 80%." />
+        <MetricCard
+          label="Onshore vs Offshore"
+          value={`${formatPercent(metrics.onshoreAverage)} / ${formatPercent(metrics.offshoreAverage)}`}
+          helper={`${metrics.onshoreCount} onshore • ${metrics.offshoreCount} offshore`}
+        />
+      </section>
+
+      <Card className="rounded-[30px]">
+        <div className="grid gap-4 lg:grid-cols-4">
           <FilterSelect
             label="Manager"
             value={filters.manager}
-            onChange={(value) => updateFilter("manager", value)}
-            options={managerOptions}
-            disabled={Boolean(managerScopedId)}
+            options={managers}
+            onChange={(value) => setFilters((current) => ({ ...current, manager: value }))}
           />
           <FilterSelect
-            label="Department"
-            value={filters.department}
-            onChange={(value) => updateFilter("department", value)}
-            options={departmentOptions.map((option) => ({ value: option, label: option }))}
+            label="Title"
+            value={filters.title}
+            options={titles.map((value) => ({ value, label: value }))}
+            onChange={(value) => setFilters((current) => ({ ...current, title: value }))}
           />
           <FilterSelect
             label="Status"
             value={filters.status}
-            onChange={(value) => updateFilter("status", value)}
-            options={STATUS_ORDER.map((option) => ({ value: option, label: option }))}
+            options={STATUS_ORDER.map((value) => ({ value, label: value }))}
+            onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
           />
           <FilterSelect
-            label="Completion band"
+            label="Completion Band"
             value={filters.completionBand}
-            onChange={(value) => updateFilter("completionBand", value)}
-            options={[
-              { value: "100%", label: "100%" },
-              { value: "80-99%", label: "80% to 99%" },
-              { value: "Below 80%", label: "Below 80%" },
-            ]}
+            options={["Complete", "Nearly Complete", "Needs Attention"].map((value) => ({
+              value,
+              label: value,
+            }))}
+            onChange={(value) => setFilters((current) => ({ ...current, completionBand: value }))}
           />
           <FilterSelect
-            label="Snapshot date"
-            value={filters.snapshotDate}
-            onChange={(value) => updateFilter("snapshotDate", value)}
-            options={snapshotOptions}
+            label="Work Location"
+            value={filters.workLocation}
+            options={["Onshore", "Offshore"].map((value) => ({ value, label: value }))}
+            onChange={(value) => setFilters((current) => ({ ...current, workLocation: value }))}
           />
+          <FilterSelect
+            label="Data History"
+            value={filters.snapshotDate}
+            options={snapshots.map((value) => ({ value, label: value === snapshots[0] ? "Latest Upload" : value }))}
+            onChange={(value) => setFilters((current) => ({ ...current, snapshotDate: value }))}
+          />
+          <label className="block lg:col-span-2">
+            <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">
+              Search Employee
+            </span>
+            <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3">
+              <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <input
+                className="w-full bg-transparent outline-none"
+                placeholder="Name, email, or title"
+                value={filters.search}
+                onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+              />
+            </div>
+          </label>
         </div>
       </Card>
 
-      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="h-[420px]">
-          <div className="mb-4 flex items-center justify-between">
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card className="rounded-[30px]">
+          <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="font-serif text-2xl font-semibold">Average by manager</h2>
-              <p className="text-sm text-[var(--muted-foreground)]">
-                Click a bar to filter the rest of the dashboard.
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
+                Manager Summary
               </p>
+              <h3 className="mt-2 font-serif text-4xl text-[var(--brand-navy)]">
+                Completion Rate by Manager
+              </h3>
             </div>
+            <p className="text-sm text-[var(--muted-foreground)]">Ranked highest to lowest</p>
           </div>
-          <ResponsiveContainer width="100%" height="88%">
-            <BarChart
-              data={metrics.managerAverages}
-              layout="vertical"
-              margin={{ top: 8, right: 16, left: 16, bottom: 8 }}
-              onClick={(state) =>
-                handleManagerChartClick(
-                  state as { activePayload?: Array<{ payload?: { managerId?: string } }> },
-                )
-              }
-            >
-              <CartesianGrid horizontal={false} strokeDasharray="4 4" />
-              <XAxis type="number" domain={[0, 100]} tickFormatter={formatPercent} />
-              <YAxis
-                type="category"
-                width={130}
-                dataKey="managerName"
-                tick={{ fontSize: 12 }}
-              />
-              <Tooltip
-                formatter={(value) =>
-                  typeof value === "number" ? formatPercent(value) : value ?? ""
-                }
-              />
-              <Bar dataKey="averageCompletion" radius={[0, 14, 14, 0]}>
-                {metrics.managerAverages.map((entry) => (
-                  <Cell
-                    key={entry.managerId}
-                    fill={
-                      filters.manager === entry.managerId
-                        ? "var(--brand-navy)"
-                        : "var(--brand-seafoam)"
-                    }
+          <div className="space-y-4">
+            {metrics.byManager.slice(0, 8).map((item) => (
+              <button
+                key={item.managerId}
+                className="grid w-full grid-cols-[160px_1fr_56px] items-center gap-4 text-left"
+                onClick={() => setFilters((current) => ({ ...current, manager: item.managerId }))}
+                type="button"
+              >
+                <span className="font-semibold text-[var(--brand-navy)]">{item.managerName}</span>
+                <span className="h-5 rounded-full bg-[var(--surface-muted)]">
+                  <span
+                    className="block h-5 rounded-full bg-[#93ccc4]"
+                    style={{ width: `${item.average}%` }}
                   />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                </span>
+                <span className="text-right font-semibold text-[var(--brand-navy)]">
+                  {formatPercent(item.average)}
+                </span>
+              </button>
+            ))}
+          </div>
         </Card>
 
-        <Card className="h-[420px]">
-          <div className="mb-4">
-            <h2 className="font-serif text-2xl font-semibold">Team mix by manager</h2>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Completion bands stay aligned with the filtered view.
+        <Card className="rounded-[30px]">
+          <div className="mb-5">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
+              Team Mix
             </p>
+            <h3 className="mt-2 font-serif text-4xl text-[var(--brand-navy)]">
+              Status Distribution by Manager
+            </h3>
           </div>
-          <ResponsiveContainer width="100%" height="88%">
-            <BarChart data={metrics.managerAverages} margin={{ top: 8, right: 12, left: 12, bottom: 8 }}>
-              <CartesianGrid vertical={false} strokeDasharray="4 4" />
-              <XAxis
-                dataKey="managerName"
-                angle={-30}
-                textAnchor="end"
-                height={80}
-                interval={0}
-                tick={{ fontSize: 12 }}
-              />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="complete" stackId="status" fill={STATUS_COLORS.Complete} name="Complete" />
-              <Bar
-                dataKey="nearly"
-                stackId="status"
-                fill={STATUS_COLORS["Nearly Complete"]}
-                name="Nearly Complete"
-              />
-              <Bar
-                dataKey="attention"
-                stackId="status"
-                fill={STATUS_COLORS["Needs Attention"]}
-                name="Needs Attention"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="space-y-4">
+            {metrics.byManager.slice(0, 8).map((item) => {
+              const total = item.count || 1;
+              return (
+                <div key={item.managerId} className="grid grid-cols-[110px_1fr] items-center gap-4">
+                  <span className="font-semibold text-[var(--brand-navy)]">{item.managerName}</span>
+                  <div className="flex h-5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+                    <span style={{ width: `${(item.complete / total) * 100}%`, backgroundColor: STATUS_COLORS.Complete }} />
+                    <span style={{ width: `${(item.nearly / total) * 100}%`, backgroundColor: STATUS_COLORS["Nearly Complete"] }} />
+                    <span style={{ width: `${(item.attention / total) * 100}%`, backgroundColor: STATUS_COLORS["Needs Attention"] }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex flex-wrap gap-4 pt-3 text-sm">
+              {STATUS_ORDER.map((status) => (
+                <div key={status} className="flex items-center gap-2 text-[var(--muted-foreground)]">
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />
+                  {status}
+                </div>
+              ))}
+            </div>
+          </div>
         </Card>
       </section>
 
-      <Card className="space-y-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <Card className="rounded-[30px]">
+        <div className="mb-5 flex items-center justify-between">
           <div>
-            <h2 className="font-serif text-2xl font-semibold">Employee drilldown</h2>
-            <p className="text-sm text-[var(--muted-foreground)]">
-              Search, sort, paginate, and export the filtered results.
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
+              Employee Drilldown
             </p>
+            <h3 className="mt-2 font-serif text-4xl text-[var(--brand-navy)]">
+              Completion by Employee
+            </h3>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              downloadTextFile(
-                `trainual-completion-${new Date().toISOString().slice(0, 10)}.csv`,
-                toCsv(sortedRecords),
-              )
-            }
-          >
+          <Button variant="ghost" onClick={() => downloadTextFile("trainual-dashboard.csv", toCsv(rows))}>
             <Download className="mr-2 h-4 w-4" />
-            Export filtered CSV
+            Export CSV
           </Button>
         </div>
-
-        <div className="overflow-x-auto rounded-[24px] border bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-[var(--surface-muted)] text-[var(--muted-foreground)]">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left">
+            <thead className="border-b text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
               <tr>
-                <SortableHeader label="Employee name" onClick={() => toggleSort("employeeName")} />
-                <SortableHeader label="Manager" onClick={() => toggleSort("managerName")} />
-                <SortableHeader label="Department" onClick={() => toggleSort("department")} />
-                <SortableHeader label="Completion %" onClick={() => toggleSort("completionPercentage")} />
-                <th className="px-4 py-3 font-medium">Status</th>
-                <SortableHeader label="Remaining modules" onClick={() => toggleSort("remainingModules")} />
-                <SortableHeader label="Snapshot date" onClick={() => toggleSort("snapshotDate")} />
+                <th className="px-4 py-3">Employee</th>
+                <th className="px-4 py-3">Manager</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Work Type</th>
+                <th className="px-4 py-3">Completion %</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Last Active</th>
               </tr>
             </thead>
             <tbody>
-              {pagedRecords.map((record) => (
-                <tr key={record.completionId} className="border-t border-[var(--border)]">
+              {rows.slice(0, 16).map((record) => (
+                <tr key={record.completionId} className="border-b last:border-b-0">
                   <td className="px-4 py-4">
                     <div>
                       <p className="font-semibold text-[var(--brand-navy)]">{record.employeeName}</p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {record.employeeEmail ?? "No email on file"}
-                      </p>
+                      <p className="text-sm text-[var(--muted-foreground)]">{record.employeeEmail ?? "No email"}</p>
                     </div>
                   </td>
                   <td className="px-4 py-4">
                     {record.managerId ? (
-                      <Link
-                        className="font-medium text-[var(--brand-navy)] underline-offset-4 hover:underline"
-                        href={`/manager/${record.managerId}`}
-                      >
+                      <Link className="font-semibold text-[var(--brand-navy)]" href={`/manager/${record.managerId}`}>
                         {record.managerName}
                       </Link>
                     ) : (
-                      <span>{record.managerName}</span>
+                      record.managerName
                     )}
                   </td>
-                  <td className="px-4 py-4">{record.department ?? "—"}</td>
-                  <td className="px-4 py-4 font-semibold">{formatPercent(record.completionPercentage)}</td>
+                  <td className="px-4 py-4 font-medium text-[var(--brand-navy)]">{record.jobTitle ?? "—"}</td>
+                  <td className="px-4 py-4 text-[var(--muted-foreground)]">{record.workLocation ?? "Unmapped"}</td>
+                  <td className="px-4 py-4">
+                    <span className="inline-flex min-w-24 justify-center rounded-full bg-[var(--surface-muted)] px-4 py-2 font-semibold text-[var(--brand-navy)]">
+                      {formatPercent(record.completionPercentage)}
+                    </span>
+                  </td>
                   <td className="px-4 py-4">
                     <StatusBadge status={record.status} />
                   </td>
-                  <td className="px-4 py-4">{record.remainingModules ?? "—"}</td>
-                  <td className="px-4 py-4">{record.snapshotDate ?? "—"}</td>
+                  <td className="px-4 py-4 font-medium text-[var(--brand-navy)]">{record.lastActive ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {!pagedRecords.length ? (
-          <div className="rounded-[24px] border border-dashed px-5 py-12 text-center text-sm text-[var(--muted-foreground)]">
-            No rows match the current filters.
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-3 text-sm text-[var(--muted-foreground)] md:flex-row md:items-center md:justify-between">
-          <p>
-            Showing {pagedRecords.length} of {sortedRecords.length} filtered results
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>
-              Previous
-            </Button>
-            <span className="px-3">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              disabled={page >= totalPages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
       </Card>
+
+      <DashboardUploadPanel />
     </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="rounded-[28px]">
+      <div className="inline-flex rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-bold uppercase tracking-[0.24em] text-[var(--brand-navy)]">
+        {label}
+      </div>
+      <p className="mt-6 text-5xl font-bold text-[var(--brand-navy)]">{value}</p>
+    </Card>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+}) {
+  return (
+    <Card className="rounded-[28px]">
+      <div className="inline-flex rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-bold uppercase tracking-[0.24em] text-[var(--brand-navy)]">
+        {label}
+      </div>
+      <p className="mt-6 font-serif text-5xl text-[var(--brand-navy)]">{value}</p>
+      <p className="mt-3 text-sm text-[var(--muted-foreground)]">{helper}</p>
+    </Card>
   );
 }
 
 function FilterSelect({
   label,
   value,
-  onChange,
   options,
-  disabled = false,
+  onChange,
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
   options: { value: string; label: string }[];
-  disabled?: boolean;
+  onChange: (value: string) => void;
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium">{label}</span>
+      <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">{label}</span>
       <select
         className="w-full rounded-2xl border bg-white px-4 py-3 outline-none"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
       >
         <option value="">All</option>
         {options.map((option) => (
@@ -602,21 +529,5 @@ function FilterSelect({
         ))}
       </select>
     </label>
-  );
-}
-
-function SortableHeader({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <th className="px-4 py-3 font-medium">
-      <button className="cursor-pointer" type="button" onClick={onClick}>
-        {label}
-      </button>
-    </th>
   );
 }

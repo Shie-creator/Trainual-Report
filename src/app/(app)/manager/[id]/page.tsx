@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { Card } from "@/components/ui/card";
-import { getDashboardDataset, getDepartmentOptions, getSnapshotDateOptions } from "@/lib/dashboard";
+import { getDashboardDataset } from "@/lib/dashboard";
 import { formatPercent } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -62,15 +62,7 @@ export default async function ManagerDetailPage({
       </section>
 
       <DashboardClient
-        records={dataset.employees}
-        managerOptions={[
-          {
-            value: id,
-            label: managerRecords[0].managerName,
-          },
-        ]}
-        departmentOptions={getDepartmentOptions(managerRecords)}
-        snapshotOptions={getSnapshotDateOptions(managerRecords)}
+        dataset={dataset}
         managerScopedId={id}
       />
     </div>

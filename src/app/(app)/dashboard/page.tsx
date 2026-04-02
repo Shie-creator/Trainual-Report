@@ -1,10 +1,5 @@
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-import {
-  getDashboardDataset,
-  getDepartmentOptions,
-  getManagerOptions,
-  getSnapshotDateOptions,
-} from "@/lib/dashboard";
+import { getDashboardDataset } from "@/lib/dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +8,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      records={dataset.employees}
-      managerOptions={getManagerOptions(dataset.employees)}
-      departmentOptions={getDepartmentOptions(dataset.employees)}
-      snapshotOptions={getSnapshotDateOptions(dataset.employees)}
+      dataset={dataset}
       managerScopedId={undefined}
     />
   );

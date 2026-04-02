@@ -81,6 +81,7 @@ export function normalizeCompletionRows(
           null,
         managerName: getValue(row, mapping, "manager_name") || null,
         department: getValue(row, mapping, "department") || null,
+        lastActive: getValue(row, mapping, "snapshot_date") || row["Last active"]?.trim() || null,
       };
     })
     .filter((row): row is NormalizedCompletionRow => Boolean(row));
@@ -89,6 +90,7 @@ export function normalizeCompletionRows(
 export function normalizeManagerRows(
   rows: Record<string, string>[],
   mapping: FieldMapping<ManagerCanonicalField>,
+  workLocation: "Onshore" | "Offshore",
 ) {
   return rows
     .map<NormalizedManagerRow | null>((row) => {
@@ -108,6 +110,7 @@ export function normalizeManagerRows(
         department: getValue(row, mapping, "department") || null,
         role: getValue(row, mapping, "role") || null,
         status: getValue(row, mapping, "status") || null,
+        workLocation,
       };
     })
     .filter((row): row is NormalizedManagerRow => Boolean(row));

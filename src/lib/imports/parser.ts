@@ -1,10 +1,12 @@
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 import {
   completionCanonicalFields,
   managerCanonicalFields,
   type CompletionCanonicalField,
   type FieldMapping,
+  type ImportType,
   type ManagerCanonicalField,
   type ParsedFlatFile,
 } from "@/lib/imports/types";
@@ -144,6 +146,32 @@ export function parseManagerMappingFile(rawText: string): ParsedFlatFile {
   };
 }
 
+export function parseManagerWorkbook(buffer: ArrayBuffer): ParsedFlatFile {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  const firstSheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json<Record<string, string>>(firstSheet, {
+    defval: "",
+  });
+
+  const headers = Object.keys(rows[0] ?? {});
+  const issues: string[] = [];
+
+  if (!rows.length) {
+    issues.push("No employee rows were found in the manager workbook.");
+  }
+
+  return {
+    headers,
+    rows: rows.map((row) =>
+      Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [key.trim(), String(value ?? "").trim()]),
+      ),
+    ),
+    issues,
+  };
+}
+
 const completionSynonyms: Record<CompletionCanonicalField, string[]> = {
   employee_name: ["name", "employee name"],
   employee_email: ["email", "work email"],
@@ -165,8 +193,9 @@ const managerSynonyms: Record<ManagerCanonicalField, string[]> = {
   manager_name: ["manager name", "manager"],
   manager_email: ["manager email"],
   department: ["department"],
-  role: ["role", "job title"],
+  role: ["role", "job title", "jobs title", "jobs  title"],
   status: ["status"],
+  work_location: ["work location"],
 };
 
 export function suggestMapping<T extends string>(
@@ -263,6 +292,6 @@ export function validateManagerMapping(
   return issues;
 }
 
-export function listCanonicalLabels(type: "completion" | "manager_mapping") {
+export function listCanonicalLabels(type: ImportType) {
   return type === "completion" ? completionCanonicalFields : managerCanonicalFields;
 }

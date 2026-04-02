@@ -21,7 +21,10 @@ export type Database = {
           employee_external_id: string | null;
           employee_name: string;
           id: string;
+          job_title: string | null;
+          last_active: string | null;
           manager_id: string | null;
+          work_location: "Onshore" | "Offshore" | null;
           updated_at: string;
         };
         Insert: {
@@ -32,7 +35,10 @@ export type Database = {
           employee_external_id?: string | null;
           employee_name: string;
           id?: string;
+          job_title?: string | null;
+          last_active?: string | null;
           manager_id?: string | null;
+          work_location?: "Onshore" | "Offshore" | null;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["employees"]["Insert"]>;
