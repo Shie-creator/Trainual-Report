@@ -18,16 +18,9 @@ type DashboardFilters = {
   title: string;
   status: string;
   snapshotDate: string;
-  completionBand: string;
   workLocation: string;
   search: string;
 };
-
-function getBand(percentage: number) {
-  if (percentage === 100) return "Complete";
-  if (percentage >= 80) return "Nearly Complete";
-  return "Needs Attention";
-}
 
 function toCsv(records: DashboardEmployeeRecord[]) {
   const headers = [
@@ -72,7 +65,6 @@ export function DashboardClient({
     title: "",
     status: "",
     snapshotDate: "",
-    completionBand: "",
     workLocation: "",
     search: "",
   });
@@ -98,7 +90,6 @@ export function DashboardClient({
       if (filters.manager && (record.managerId ?? record.managerName) !== filters.manager) return false;
       if (filters.title && record.jobTitle !== filters.title) return false;
       if (filters.status && record.status !== filters.status) return false;
-      if (filters.completionBand && getBand(record.completionPercentage) !== filters.completionBand) return false;
       if (filters.workLocation && record.workLocation !== filters.workLocation) return false;
       if (
         query &&
@@ -234,10 +225,6 @@ export function DashboardClient({
               <h2 className="max-w-3xl font-serif text-6xl leading-none text-[var(--brand-navy)]">
                 Trainual Completion Dashboard
               </h2>
-              <p className="max-w-2xl text-lg leading-8 text-[var(--muted-foreground)]">
-                Which managers have the healthiest team completion rates, which employees
-                need follow-up now, and how onshore versus offshore progress compares.
-              </p>
             </div>
             <div className="flex flex-wrap gap-3 text-sm">
               <div className="rounded-full border px-4 py-2 text-[var(--muted-foreground)]">
@@ -253,8 +240,8 @@ export function DashboardClient({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
           <MiniMetric label="Total Employees" value={String(metrics.total)} />
           <MiniMetric label="Managers" value={String(metrics.managers)} />
-          <MiniMetric label="Onshore" value={String(metrics.onshoreCount)} />
-          <MiniMetric label="Offshore" value={String(metrics.offshoreCount)} />
+          <MiniMetric label="Onshore Employees" value={String(metrics.onshoreCount)} />
+          <MiniMetric label="Offshore Employees" value={String(metrics.offshoreCount)} />
         </div>
       </section>
 
@@ -283,7 +270,7 @@ export function DashboardClient({
       </section>
 
       <Card className="rounded-[30px]">
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-3">
           <FilterSelect
             label="Manager"
             value={filters.manager}
@@ -303,15 +290,6 @@ export function DashboardClient({
             onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
           />
           <FilterSelect
-            label="Completion Band"
-            value={filters.completionBand}
-            options={["Complete", "Nearly Complete", "Needs Attention"].map((value) => ({
-              value,
-              label: value,
-            }))}
-            onChange={(value) => setFilters((current) => ({ ...current, completionBand: value }))}
-          />
-          <FilterSelect
             label="Work Location"
             value={filters.workLocation}
             options={["Onshore", "Offshore"].map((value) => ({ value, label: value }))}
@@ -323,7 +301,7 @@ export function DashboardClient({
             options={snapshots.map((value) => ({ value, label: value === snapshots[0] ? "Latest Upload" : value }))}
             onChange={(value) => setFilters((current) => ({ ...current, snapshotDate: value }))}
           />
-          <label className="block lg:col-span-2">
+          <label className="block lg:col-span-1">
             <span className="mb-2 block text-sm font-medium text-[var(--brand-navy)]">
               Search Employee
             </span>

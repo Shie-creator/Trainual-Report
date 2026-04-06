@@ -11,6 +11,7 @@ import {
   validateManagerMapping,
 } from "@/lib/imports/parser";
 import {
+  getFirstLastIdentity,
   resolveCanonicalManagerName,
   resolveCanonicalPersonName,
 } from "@/lib/name-matching";
@@ -44,6 +45,18 @@ type ExistingEmployee = {
 
 function normalizeKey(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+function getEmployeeIdentity(row: {
+  employeeExternalId?: string | null;
+  employeeEmail?: string | null;
+  employeeName: string;
+}) {
+  return (
+    normalizeKey(row.employeeExternalId) ||
+    normalizeKey(row.employeeEmail) ||
+    getFirstLastIdentity(row.employeeName)
+  );
 }
 
 async function upsertManagers(
@@ -131,6 +144,10 @@ async function upsertEmployees(
       employeeMap.set(`email:${normalizeKey(employee.employee_email)}`, employee);
     }
     employeeMap.set(`name:${normalizeKey(employee.employee_name)}`, employee);
+    const firstLastIdentity = getFirstLastIdentity(employee.employee_name);
+    if (firstLastIdentity) {
+      employeeMap.set(`identity:${firstLastIdentity}`, employee);
+    }
   });
 
   const normalizedCompletionRows = completionRows.map((row) => ({
@@ -155,21 +172,23 @@ async function upsertEmployees(
   >();
 
   [...managerRows, ...normalizedCompletionRows].forEach((row) => {
-    const key =
-      normalizeKey("employeeExternalId" in row ? row.employeeExternalId : null) ||
-      normalizeKey(row.employeeEmail) ||
-      normalizeKey(row.employeeName);
+    const isManagerRow = "workLocation" in row;
+    const key = getEmployeeIdentity({
+      employeeExternalId: "employeeExternalId" in row ? row.employeeExternalId : null,
+      employeeEmail: row.employeeEmail,
+      employeeName: row.employeeName,
+    });
     if (!key) return;
 
     const current = mergedRows.get(key) ?? {
       employeeName: row.employeeName,
       employeeEmail: row.employeeEmail,
       employeeExternalId: "employeeExternalId" in row ? row.employeeExternalId : null,
-      department: row.department,
-      managerName: row.managerName,
+      department: isManagerRow ? row.department : null,
+      managerName: isManagerRow ? row.managerName : null,
       active: true,
-      workLocation: "workLocation" in row ? row.workLocation : null,
-      jobTitle: "jobTitle" in row ? row.jobTitle : row.role,
+      workLocation: isManagerRow ? row.workLocation : null,
+      jobTitle: isManagerRow ? row.role : null,
       lastActive: "lastActive" in row ? row.lastActive : null,
     };
 
@@ -178,12 +197,13 @@ async function upsertEmployees(
     current.employeeExternalId =
       current.employeeExternalId ||
       ("employeeExternalId" in row ? row.employeeExternalId : null);
-    current.department = current.department || row.department;
-    current.managerName = current.managerName || row.managerName;
+    if (isManagerRow) {
+      current.department = current.department || row.department;
+      current.managerName = current.managerName || row.managerName;
+      current.workLocation = current.workLocation || row.workLocation;
+      current.jobTitle = current.jobTitle || row.role;
+    }
     current.active = "status" in row ? !/terminated/i.test(row.status ?? "") : current.active;
-    current.workLocation =
-      current.workLocation || ("workLocation" in row ? row.workLocation : null);
-    current.jobTitle = current.jobTitle || ("jobTitle" in row ? row.jobTitle : row.role);
     current.lastActive = current.lastActive || ("lastActive" in row ? row.lastActive : null);
     mergedRows.set(key, current);
   });
@@ -220,7 +240,8 @@ async function upsertEmployees(
       (row.employeeExternalId &&
         employeeMap.get(`external:${normalizeKey(row.employeeExternalId)}`)) ||
       (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`)) ||
-      employeeMap.get(`name:${normalizeKey(row.employeeName)}`);
+      employeeMap.get(`name:${normalizeKey(row.employeeName)}`) ||
+      employeeMap.get(`identity:${getFirstLastIdentity(row.employeeName)}`);
 
     const payload = {
       employee_name: row.employeeName,

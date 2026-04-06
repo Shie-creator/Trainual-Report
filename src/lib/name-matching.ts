@@ -13,6 +13,23 @@ function getCoreTokens(value: string) {
     .filter((token) => token.length > 1);
 }
 
+export function getFirstLastIdentity(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const tokens = getCoreTokens(value);
+  if (!tokens.length) {
+    return "";
+  }
+
+  if (tokens.length === 1) {
+    return tokens[0];
+  }
+
+  return `${tokens[0]} ${tokens[tokens.length - 1]}`;
+}
+
 function isAliasMatch(candidate: string, canonical: string) {
   const candidateTokens = getCoreTokens(candidate);
   const canonicalTokens = getCoreTokens(canonical);
