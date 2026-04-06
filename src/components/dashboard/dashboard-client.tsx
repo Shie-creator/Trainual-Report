@@ -253,8 +253,8 @@ export function DashboardClient({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
           <MiniMetric label="Total Employees" value={String(metrics.total)} />
           <MiniMetric label="Managers" value={String(metrics.managers)} />
-          <MiniMetric label="Complete" value={String(metrics.complete)} />
-          <MiniMetric label="Needs Attention" value={String(metrics.attention)} />
+          <MiniMetric label="Onshore" value={String(metrics.onshoreCount)} />
+          <MiniMetric label="Offshore" value={String(metrics.offshoreCount)} />
         </div>
       </section>
 
@@ -426,9 +426,9 @@ export function DashboardClient({
             Export CSV
           </Button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="max-h-[36rem] overflow-auto rounded-[22px] border border-[var(--border)]">
           <table className="min-w-full text-left">
-            <thead className="border-b text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
+            <thead className="sticky top-0 z-10 border-b bg-white text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
               <tr>
                 <th className="px-4 py-3">Employee</th>
                 <th className="px-4 py-3">Manager</th>
@@ -440,7 +440,7 @@ export function DashboardClient({
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 16).map((record) => (
+              {rows.map((record) => (
                 <tr key={record.completionId} className="border-b last:border-b-0">
                   <td className="px-4 py-4">
                     <div>
