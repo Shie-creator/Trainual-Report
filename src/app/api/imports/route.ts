@@ -54,8 +54,8 @@ function getEmployeeIdentity(row: {
 }) {
   return (
     normalizeKey(row.employeeExternalId) ||
-    normalizeKey(row.employeeEmail) ||
-    getFirstLastIdentity(row.employeeName)
+    getFirstLastIdentity(row.employeeName) ||
+    normalizeKey(row.employeeEmail)
   );
 }
 
@@ -239,9 +239,9 @@ async function upsertEmployees(
     const existing =
       (row.employeeExternalId &&
         employeeMap.get(`external:${normalizeKey(row.employeeExternalId)}`)) ||
-      (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`)) ||
+      employeeMap.get(`identity:${getFirstLastIdentity(row.employeeName)}`) ||
       employeeMap.get(`name:${normalizeKey(row.employeeName)}`) ||
-      employeeMap.get(`identity:${getFirstLastIdentity(row.employeeName)}`);
+      (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`));
 
     const payload = {
       employee_name: row.employeeName,
@@ -327,8 +327,9 @@ async function insertCompletions(
       const employee =
         (row.employeeExternalId &&
           employeeMap.get(`external:${normalizeKey(row.employeeExternalId)}`)) ||
-        (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`)) ||
-        employeeMap.get(`name:${normalizeKey(row.employeeName)}`);
+        employeeMap.get(`identity:${getFirstLastIdentity(row.employeeName)}`) ||
+        employeeMap.get(`name:${normalizeKey(row.employeeName)}`) ||
+        (row.employeeEmail && employeeMap.get(`email:${normalizeKey(row.employeeEmail)}`));
 
       if (!employee) return null;
 
