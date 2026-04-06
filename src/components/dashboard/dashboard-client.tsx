@@ -331,8 +331,8 @@ export function DashboardClient({
             </div>
             <p className="text-sm text-[var(--muted-foreground)]">Ranked highest to lowest</p>
           </div>
-          <div className="space-y-4">
-            {metrics.byManager.slice(0, 8).map((item) => (
+          <div className="max-h-[36rem] space-y-4 overflow-y-auto pr-2">
+            {metrics.byManager.map((item) => (
               <button
                 key={item.managerId}
                 className="grid w-full grid-cols-[160px_1fr_56px] items-center gap-4 text-left"
@@ -363,8 +363,8 @@ export function DashboardClient({
               Status Distribution by Manager
             </h3>
           </div>
-          <div className="space-y-4">
-            {metrics.byManager.slice(0, 8).map((item) => {
+          <div className="max-h-[36rem] space-y-4 overflow-y-auto pr-2">
+            {metrics.byManager.map((item) => {
               const total = item.count || 1;
               return (
                 <div key={item.managerId} className="grid grid-cols-[110px_1fr] items-center gap-4">
